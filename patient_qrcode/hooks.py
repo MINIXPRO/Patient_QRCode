@@ -122,13 +122,13 @@ app_license = "mit"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
+doc_events = {
+	"Patient": {
+		"on_update": "patient_qrcode.qrcode.generate_qr_code",
 # 		"on_cancel": "method",
 # 		"on_trash": "method"
-# 	}
-# }
+	}
+}
 
 # Scheduled Tasks
 # ---------------
