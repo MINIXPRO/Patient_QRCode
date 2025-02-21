@@ -58,7 +58,7 @@ def generate_qr_code(doc, method):
         frappe.log_error(f"QR Code Generation Error for Asset {doc.name}: {str(e)}")
 
 
-# # Py
+
 
 
 
