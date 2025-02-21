@@ -22,13 +22,13 @@ def generate_qr_code(doc, method):
         
         asset_data = (
             f"ID: {doc.name}\n"
-            f"Trial ID: {doc.asset_name}\n"
+            f"Trial ID: {doc.custom_trial_id}\n"
             f"Patient Initials: {doc.item_code}\n"
-            f"Date of birth: {doc.asset_category}\n"
-            f"Gender: {doc.location}\n"
-            f"Blood Group: {doc.custodian}\n"
-            f"Weight on the Day of Leukapheresis (Kgs): {doc.custom_model}\n"
-            f"Hospital ID (UHID): {doc.segment}\n"
+            f"Date of birth: {doc.custom_patient_initials}\n"
+            f"Gender: {doc.sex}\n"
+            f"Blood Group: {doc.blood_group}\n"
+            f"Weight on the Day of Leukapheresis (Kgs): {doc.custom_weight_on_the_day_of_leukapheresis}\n"
+            f"Hospital ID (UHID): {doc.custom_hospital_id_uhid}\n"
             f"ASSET URL: {asset_url}\n"
         )
 
