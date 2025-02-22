@@ -23,8 +23,8 @@ def generate_qr_code(doc, method):
         asset_data = (
             f"ID: {doc.name}\n"
             f"Trial ID: {doc.custom_trial_id}\n"
-            f"Patient Initials: {doc.item_code}\n"
-            f"Date of birth: {doc.custom_patient_initials}\n"
+            f"Patient Initials: {doc.custom_patient_initials}\n"
+            f"Date of birth: {doc.dob}\n"
             f"Gender: {doc.sex}\n"
             f"Blood Group: {doc.blood_group}\n"
             f"Weight on the Day of Leukapheresis (Kgs): {doc.custom_weight_on_the_day_of_leukapheresis}\n"
