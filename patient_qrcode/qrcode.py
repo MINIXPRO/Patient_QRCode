@@ -52,7 +52,7 @@ def generate_qr_code(doc, method):
 
 
 @frappe.whitelist()
-def generate_cart_qr_codes(patient_id, batch=None):
+def generate_cart_qr_codes(patient_id, cart_name):
     """
     Generate three different QR codes for CarT Manufacturing:
     1. Patient QR Code - Contains patient information
@@ -65,7 +65,7 @@ def generate_cart_qr_codes(patient_id, batch=None):
         patient_name = patient.patient_name or patient_id
         
         # Determine batch: use passed batch, or try common patient fields, else 'N/A'
-        batch_value = batch or patient.get("custom_batch") or patient.get("batch") or patient.get("custom_batch_number") or 'N/A'
+        batch_value = batch 
         
         base_url = frappe.utils.get_url()
         patient_url = f"{base_url}/app/patient/{patient_id}"
@@ -82,6 +82,9 @@ def generate_cart_qr_codes(patient_id, batch=None):
             f"Hospital ID (UHID): {patient.custom_hospital_id_uhid or 'N/A'}\n"
             f"URL: {patient_url}"
         )
+        
+        cart = frappe.get_doc("CarT Manufacturing", cart_name)
+        batch_value = cart.batch or "N/A"
         
         # Generate Patient QR Code (original patient data)
         patient_qr_data = base_patient_data
