@@ -65,7 +65,9 @@ def generate_cart_qr_codes(patient_id, cart_name):
         patient_name = patient.patient_name or patient_id
         
         # Determine batch: use passed batch, or try common patient fields, else 'N/A'
-        batch_value = batch 
+        cart = frappe.get_doc("CarT Manufacturing", cart_name)
+        batch_value = cart.batch or "N/A"
+
         
         base_url = frappe.utils.get_url()
         patient_url = f"{base_url}/app/patient/{patient_id}"
