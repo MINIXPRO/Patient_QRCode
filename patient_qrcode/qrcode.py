@@ -52,17 +52,20 @@ def generate_qr_code(doc, method):
 
 
 @frappe.whitelist()
-def generate_cart_qr_codes(patient_id):
+def generate_cart_qr_codes(patient_id, batch=None):
     """
     Generate three different QR codes for CarT Manufacturing:
     1. Patient QR Code - Contains patient information
-    2. BMR QR Code - Contains patient info + Type: BMR
-    3. G-Rex QR Code - Contains patient info + Type: G-Rex
+    2. BMR QR Code - Contains patient info + Type: BMR + Batch
+    3. G-Rex QR Code - Contains patient info + Type: G-Rex + Batch
     """
     try:
         # Get patient details
         patient = frappe.get_doc('Patient', patient_id)
         patient_name = patient.patient_name or patient_id
+        
+        # Determine batch: use passed batch, or try common patient fields, else 'N/A'
+        batch_value = batch or patient.get("custom_batch") or patient.get("batch") or patient.get("custom_batch_number") or 'N/A'
         
         base_url = frappe.utils.get_url()
         patient_url = f"{base_url}/app/patient/{patient_id}"
@@ -84,15 +87,17 @@ def generate_cart_qr_codes(patient_id):
         patient_qr_data = base_patient_data
         patient_qr_base64 = generate_qr_code_base64(patient_qr_data)
         
-        # Generate BMR QR Code (patient data + BMR type)
+        # Generate BMR QR Code (batch + patient data + BMR type)
         bmr_qr_data = (
+            f"Batch: {batch_value}\n"
             f"Type: BMR (Batch Manufacturing Record)\n"
             f"{base_patient_data}"
         )
         bmr_qr_base64 = generate_qr_code_base64(bmr_qr_data)
         
-        # Generate G-Rex QR Code (patient data + G-Rex type)
+        # Generate G-Rex QR Code (batch + patient data + G-Rex type)
         grex_qr_data = (
+            f"Batch: {batch_value}\n"
             f"Type: G-Rex\n"
             f"{base_patient_data}"
         )
