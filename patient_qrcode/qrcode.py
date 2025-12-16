@@ -151,3 +151,47 @@ def generate_qr_code_base64(data):
     except Exception as e:
         frappe.log_error(f"Error in generate_qr_code_base64: {str(e)}")
         raise
+    
+    
+    
+@frappe.whitelist()
+def get_item_qr_codes_for_table(cart_manufacturing_name):
+    doc = frappe.get_doc("CarT Manufacturing", cart_manufacturing_name)
+    
+    if not doc.patient or not doc.batch:
+        return {}
+
+    patient = frappe.get_doc("Patient", doc.patient)
+    patient_name = patient.patient_name or doc.patient
+    base_url = frappe.utils.get_url()
+    cart_url = f"{base_url}/app/cart-manufacturing/{doc.name}"
+
+    qr_data = {}
+
+    for item in doc.items:
+        data = (
+            f"Manufacturing: {doc.name}\n"
+            f"Batch: {doc.batch}\n"
+            f"Patient: {patient_name} ({doc.patient})\n"
+            f"Item Code: {item.item_code}\n"
+            f"Item Name: {item.item_name}\n"
+            f"Dose: {item.dose or 'N/A'}\n"
+            f"URL: {cart_url}"
+        ).strip()
+
+        qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=4)
+        qr.add_data(data)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+
+        buffer = BytesIO()
+        img.save(buffer, format="PNG")
+        qr_base64 = f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}"
+
+        qr_data[item.name] = {
+            "qr_code": qr_base64,
+            "dose": item.dose or "N/A",
+            "qty": item.qty
+        }
+
+    return qr_data
