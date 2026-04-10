@@ -259,3 +259,54 @@ def get_item_qr_codes_for_table(cart_manufacturing_name):
         frappe.logger().error(f"Fatal error in get_item_qr_codes_for_table: {str(e)}")
         frappe.log_error(frappe.get_traceback(), f"QR Generation Fatal Error - {cart_manufacturing_name}")
         return {}
+
+
+
+@frappe.whitelist()
+def generate_lsm_qr_code(patient_id, doctype=None, docname=None):
+    try:
+        # Fetch patient
+        patient = frappe.get_doc('Patient', patient_id)
+        patient_name = patient.patient_name or patient_id
+
+        base_url = frappe.utils.get_url()
+
+        # Dynamic redirect based on doctype/docname
+        if doctype and docname:
+            redirect_to = f"/app/{frappe.scrub(doctype)}/{urllib.parse.quote(str(docname))}"
+        else:
+            redirect_to = f"/app/patient/{urllib.parse.quote(str(patient_id))}"
+
+        # Prepare patient parameters
+        patient_params = {
+            "pid": patient_id,
+            "trial_id": getattr(patient, 'custom_trial_id', None),
+            "initials": getattr(patient, 'custom_patient_initials', None),
+            "dob": str(patient.dob) if patient.dob else None,
+            "gender": patient.sex,
+            "blood_group": patient.blood_group,
+            "uid": getattr(patient, 'custom_hospital_id_uhid', None),
+            "type": "LSM",
+            "redirect_to": redirect_to
+        }
+
+        # Remove empty/None values
+        patient_params = {k: v for k, v in patient_params.items() if v}
+
+        # Generate QR URL
+        query_string = urllib.parse.urlencode(patient_params, quote_via=urllib.parse.quote)
+        lsm_qr_url = f"{base_url}/patient-summary?{query_string}"
+
+        # Generate QR Base64
+        lsm_qr_base64 = generate_qr_code_base64(lsm_qr_url)
+
+        return {
+            "patient_qr": lsm_qr_base64,
+            "patient_name": patient_name
+        }
+
+    except Exception as e:
+        frappe.log_error(
+            f"Error generating LSM QR code for patient {patient_id}: {str(e)}"
+        )
+        frappe.throw(f"Failed to generate LSM QR code: {str(e)}")
