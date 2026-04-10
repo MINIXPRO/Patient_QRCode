@@ -2,111 +2,142 @@ import qrcode
 import frappe
 from io import BytesIO
 import base64
-
+import urllib.parse
 
 @frappe.whitelist()
-def generate_qr_code(doc, method):
-    """Generate Patient QR Code on Patient document save"""
-    print("######## QR Code Generation Started ########")
-    
+def generate_qr_code(doc, method=None):
     try:
-        if frappe.local.flags.get("qr_code_generated"):
-            return
-        frappe.local.flags["qr_code_generated"] = True 
-
+        # QR already generated
+        # if doc.custom_base64data:
+        #     return
         base_url = frappe.utils.get_url()
-        asset_url = f"{base_url}/app/patient/{doc.name}"
-        
-        # Patient QR Code Data
-        asset_data = (
-            f"ID: {doc.name}\n"
-            f"Trial ID: {doc.custom_trial_id}\n"
-            f"Patient Initials: {doc.custom_patient_initials}\n"
-            f"Date of birth: {doc.dob}\n"
-            f"Gender: {doc.sex}\n"
-            f"Blood Group: {doc.blood_group}\n"
-            f"Weight on the Day of Leukapheresis (Kgs): {doc.custom_weight_on_the_day_of_leukapheresis}\n"
-            f"Hospital ID (UHID): {doc.custom_hospital_id_uhid}\n"
-            f"ASSET URL: {asset_url}\n"
+        params = {
+            "pid": doc.name,
+            "trial_id": doc.get("custom_trial_id"),
+            "initials": doc.get("custom_patient_initials"),
+            "dob": doc.get("dob"),
+            "gender": doc.get("sex"),
+            "blood_group": doc.get("blood_group"),
+            "weight": doc.get("custom_weight_on_the_day_of_leukapheresis"),
+            "uid": doc.get("custom_hospital_id_uhid"),
+            "redirect_to": f"/app/patient/{urllib.parse.quote(doc.name)}"
+        }
+        # remove empty values
+        params = {k: v for k, v in params.items() if v}
+        query_string = urllib.parse.urlencode(
+            params, quote_via=urllib.parse.quote
         )
-
-        # Generate QR Code
-        qr = qrcode.QRCode(version=1, box_size=10, border=5)
-        qr.add_data(asset_data.strip())
+        qr_url = f"{base_url}/patient-summary?{query_string}"
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=6,
+            border=4
+        )
+        qr.add_data(qr_url)
         qr.make(fit=True)
-        img = qr.make_image(fill="black", back_color="white")
-
-        # Convert to base64
+        img = qr.make_image(fill_color="black", back_color="white")
         buffer = BytesIO()
         img.save(buffer, format="PNG")
-        qr_code_base64 = base64.b64encode(buffer.getvalue()).decode()
-        qr_code_data = f"data:image/png;base64,{qr_code_base64}"
-
-        # Save to Patient document
-        doc.db_set("custom_base64data", qr_code_data)
-
-        print("######## QR Code Generated & Stored Successfully ########")
-
+        base64_data = (
+            "data:image/png;base64,"
+            + base64.b64encode(buffer.getvalue()).decode()
+        )
+        doc.db_set(
+            "custom_base64data",
+            base64_data,
+            update_modified=False
+        )
+        frappe.logger().info(
+            f"QR Code generated successfully for Patient {doc.name}"
+        )
     except Exception as e:
-        frappe.log_error(f"QR Code Generation Error for Patient {doc.name}: {str(e)}")
+        frappe.log_error(
+            title="QR Code Generation Error",
+            message=f"Patient: {doc.name}\nError: {str(e)}"
+        )
+        frappe.throw("Failed to generate QR Code")
+
+
+
+
+
 
 
 @frappe.whitelist()
 def generate_cart_qr_codes(patient_id, cart_name):
     """
     Generate three different QR codes for CarT Manufacturing:
-    1. Patient QR Code - Contains patient information
-    2. BMR QR Code - Contains patient info + Type: BMR + Batch
-    3. G-Rex QR Code - Contains patient info + Type: G-Rex + Batch
+    1. Patient QR Code - Contains patient information (opens web page)
+    2. BMR QR Code - Contains patient info + Type: BMR + Batch (opens web page)
+    3. G-Rex QR Code - Contains patient info + Type: G-Rex + Batch (opens web page)
     """
     try:
         # Get patient details
         patient = frappe.get_doc('Patient', patient_id)
         patient_name = patient.patient_name or patient_id
         
-        # Determine batch: use passed batch, or try common patient fields, else 'N/A'
+        # Get cart details
         cart = frappe.get_doc("CarT Manufacturing", cart_name)
         batch_value = cart.batch or "N/A"
-
         
         base_url = frappe.utils.get_url()
-        patient_url = f"{base_url}/app/patient/{patient_id}"
         
-        # Base patient data
-        base_patient_data = (
-            f"ID: {patient_id}\n"
-            f"Patient Name: {patient_name}\n"
-            f"Trial ID: {patient.custom_trial_id or 'N/A'}\n"
-            f"Patient Initials: {patient.custom_patient_initials or 'N/A'}\n"
-            f"Date of Birth: {patient.dob or 'N/A'}\n"
-            f"Gender: {patient.sex or 'N/A'}\n"
-            f"Blood Group: {patient.blood_group or 'N/A'}\n"
-            f"Hospital ID (UHID): {patient.custom_hospital_id_uhid or 'N/A'}\n"
-            f"URL: {patient_url}"
-        )
+        # Generate Patient QR Code (URL with patient data)
+        patient_params = {
+            "pid": patient_id,
+            "trial_id": patient.custom_trial_id,
+            "initials": patient.custom_patient_initials,
+            "dob": patient.dob,
+            "gender": patient.sex,
+            "blood_group": patient.blood_group,
+            "uid": patient.custom_hospital_id_uhid,
+            "redirect_to": f"/app/patient/{urllib.parse.quote(patient_id)}"
+        }
+        # Remove empty values
+        patient_params = {k: v for k, v in patient_params.items() if v}
+        patient_query_string = urllib.parse.urlencode(patient_params, quote_via=urllib.parse.quote)
+        patient_qr_url = f"{base_url}/patient-summary?{patient_query_string}"
+        patient_qr_base64 = generate_qr_code_base64(patient_qr_url)
         
-        cart = frappe.get_doc("CarT Manufacturing", cart_name)
-        batch_value = cart.batch or "N/A"
+        # Generate BMR QR Code (URL with BMR data)
+        bmr_params = {
+            "pid": patient_id,
+            "trial_id": patient.custom_trial_id,
+            "initials": patient.custom_patient_initials,
+            "dob": patient.dob,
+            "gender": patient.sex,
+            "blood_group": patient.blood_group,
+            "uid": patient.custom_hospital_id_uhid,
+            "batch": batch_value,
+            "type": "BMR",
+            "type_full": "Batch Manufacturing Record",
+            "redirect_to": f"/app/cart-manufacturing/{urllib.parse.quote(cart_name)}"
+        }
+        # Remove empty values
+        bmr_params = {k: v for k, v in bmr_params.items() if v}
+        bmr_query_string = urllib.parse.urlencode(bmr_params, quote_via=urllib.parse.quote)
+        bmr_qr_url = f"{base_url}/patient-bmr?{bmr_query_string}"
+        bmr_qr_base64 = generate_qr_code_base64(bmr_qr_url)
         
-        # Generate Patient QR Code (original patient data)
-        patient_qr_data = base_patient_data
-        patient_qr_base64 = generate_qr_code_base64(patient_qr_data)
-        
-        # Generate BMR QR Code (batch + patient data + BMR type)
-        bmr_qr_data = (
-            f"Batch: {batch_value}\n"
-            f"Type: BMR (Batch Manufacturing Record)\n"
-            f"{base_patient_data}"
-        )
-        bmr_qr_base64 = generate_qr_code_base64(bmr_qr_data)
-        
-        # Generate G-Rex QR Code (batch + patient data + G-Rex type)
-        grex_qr_data = (
-            f"Batch: {batch_value}\n"
-            f"Type: G-Rex\n"
-            f"{base_patient_data}"
-        )
-        grex_qr_base64 = generate_qr_code_base64(grex_qr_data)
+        # Generate G-Rex QR Code (URL with G-Rex data)
+        grex_params = {
+            "pid": patient_id,
+            "trial_id": patient.custom_trial_id,
+            "initials": patient.custom_patient_initials,
+            "dob": patient.dob,
+            "gender": patient.sex,
+            "blood_group": patient.blood_group,
+            "uid": patient.custom_hospital_id_uhid,
+            "batch": batch_value,
+            "type": "G-Rex",
+            "redirect_to": f"/app/cart-manufacturing/{urllib.parse.quote(cart_name)}"
+        }
+        # Remove empty values
+        grex_params = {k: v for k, v in grex_params.items() if v}
+        grex_query_string = urllib.parse.urlencode(grex_params, quote_via=urllib.parse.quote)
+        grex_qr_url = f"{base_url}/patient-grex?{grex_query_string}"
+        grex_qr_base64 = generate_qr_code_base64(grex_qr_url)
         
         return {
             'patient_qr': patient_qr_base64,
@@ -122,15 +153,15 @@ def generate_cart_qr_codes(patient_id, cart_name):
 
 def generate_qr_code_base64(data):
     """
-    Generate a QR code from data and return it as a base64 string
+    Generate a QR code from data (URL) and return it as a base64 string
     """
     try:
-        # Create QR code instance
+        # Create QR code instance (same settings as your working example)
         qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
-            border=5,
+            version=1,  # Changed to None for automatic sizing
+            error_correction=qrcode.constants.ERROR_CORRECT_M,  # Changed to M for better reliability
+            box_size=10,  # Changed to match your working example
+            border=5,  # Changed to match your working example
         )
         
         # Add data and generate
@@ -153,45 +184,129 @@ def generate_qr_code_base64(data):
         raise
     
     
-    
 @frappe.whitelist()
 def get_item_qr_codes_for_table(cart_manufacturing_name):
-    doc = frappe.get_doc("CarT Manufacturing", cart_manufacturing_name)
-    
-    if not doc.patient or not doc.batch:
+    """
+    Generate QR codes for items in CarT Manufacturing table (with URL)
+    """
+    try:
+        frappe.logger().info(f"Starting QR code generation for: {cart_manufacturing_name}")
+        
+        doc = frappe.get_doc("CarT Manufacturing", cart_manufacturing_name)
+        
+        if not doc.patient or not doc.batch:
+            frappe.logger().warning(f"Missing patient or batch for {cart_manufacturing_name}")
+            return {}
+        
+        patient = frappe.get_doc("Patient", doc.patient)
+        patient_name = patient.patient_name or doc.patient
+        base_url = frappe.utils.get_url()
+        qr_data = {}
+        
+        frappe.logger().info(f"Processing {len(doc.items)} items for patient: {patient_name}")
+        
+        for item in doc.items:
+            try:
+                frappe.logger().debug(f"Generating QR for item: {item.item_code}")
+                
+                # Create URL with parameters instead of plain text
+                item_params = {
+                    "manufacturing": doc.name,
+                    "batch": doc.batch,
+                    "patient": patient_name,
+                    "pid": doc.patient,
+                    "item_code": item.item_code,
+                    "item_name": item.item_name,
+                    "dose": item.dose or "N/A",
+                    "redirect_to": f"/app/cart-manufacturing/{urllib.parse.quote(doc.name)}"
+                }
+                # Remove empty values
+                item_params = {k: v for k, v in item_params.items() if v}
+                item_query_string = urllib.parse.urlencode(item_params, quote_via=urllib.parse.quote)
+                item_qr_url = f"{base_url}/cart-item?{item_query_string}"
+                
+                # Generate QR code with URL
+                qr = qrcode.QRCode(
+                    version=1,
+                    error_correction=qrcode.constants.ERROR_CORRECT_M,
+                    box_size=8,
+                    border=4
+                )
+                qr.add_data(item_qr_url)
+                qr.make(fit=True)
+                img = qr.make_image(fill_color="black", back_color="white")
+                
+                buffer = BytesIO()
+                img.save(buffer, format="PNG")
+                qr_base64 = f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}"
+                
+                # Store QR code with additional item info
+                qr_data[item.name] = {
+                    "qr_code": qr_base64,
+                    "dose": item.dose or "N/A",
+                    "qty": item.qty
+                }
+                
+            except Exception as e:
+                frappe.logger().error(f"Error generating QR for item {item.item_code}: {str(e)}")
+                frappe.log_error(frappe.get_traceback(), f"QR Generation Error - {item.item_code}")
+                continue
+        
+        frappe.logger().info(f"Successfully generated {len(qr_data)} QR codes for {cart_manufacturing_name}")
+        return qr_data
+        
+    except Exception as e:
+        frappe.logger().error(f"Fatal error in get_item_qr_codes_for_table: {str(e)}")
+        frappe.log_error(frappe.get_traceback(), f"QR Generation Fatal Error - {cart_manufacturing_name}")
         return {}
 
-    patient = frappe.get_doc("Patient", doc.patient)
-    patient_name = patient.patient_name or doc.patient
-    base_url = frappe.utils.get_url()
-    cart_url = f"{base_url}/app/cart-manufacturing/{doc.name}"
 
-    qr_data = {}
 
-    for item in doc.items:
-        data = (
-            f"Manufacturing: {doc.name}\n"
-            f"Batch: {doc.batch}\n"
-            f"Patient: {patient_name} ({doc.patient})\n"
-            f"Item Code: {item.item_code}\n"
-            f"Item Name: {item.item_name}\n"
-            f"Dose: {item.dose or 'N/A'}\n"
-            f"URL: {cart_url}"
-        ).strip()
+@frappe.whitelist()
+def generate_lsm_qr_code(patient_id, doctype=None, docname=None):
+    try:
+        # Fetch patient
+        patient = frappe.get_doc('Patient', patient_id)
+        patient_name = patient.patient_name or patient_id
 
-        qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=4)
-        qr.add_data(data)
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
+        base_url = frappe.utils.get_url()
 
-        buffer = BytesIO()
-        img.save(buffer, format="PNG")
-        qr_base64 = f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}"
+        # Dynamic redirect based on doctype/docname
+        if doctype and docname:
+            redirect_to = f"/app/{frappe.scrub(doctype)}/{urllib.parse.quote(str(docname))}"
+        else:
+            redirect_to = f"/app/patient/{urllib.parse.quote(str(patient_id))}"
 
-        qr_data[item.name] = {
-            "qr_code": qr_base64,
-            "dose": item.dose or "N/A",
-            "qty": item.qty
+        # Prepare patient parameters
+        patient_params = {
+            "pid": patient_id,
+            "trial_id": getattr(patient, 'custom_trial_id', None),
+            "initials": getattr(patient, 'custom_patient_initials', None),
+            "dob": str(patient.dob) if patient.dob else None,
+            "gender": patient.sex,
+            "blood_group": patient.blood_group,
+            "uid": getattr(patient, 'custom_hospital_id_uhid', None),
+            "type": "LSM",
+            "redirect_to": redirect_to
         }
 
-    return qr_data
+        # Remove empty/None values
+        patient_params = {k: v for k, v in patient_params.items() if v}
+
+        # Generate QR URL
+        query_string = urllib.parse.urlencode(patient_params, quote_via=urllib.parse.quote)
+        lsm_qr_url = f"{base_url}/patient-summary?{query_string}"
+
+        # Generate QR Base64
+        lsm_qr_base64 = generate_qr_code_base64(lsm_qr_url)
+
+        return {
+            "patient_qr": lsm_qr_base64,
+            "patient_name": patient_name
+        }
+
+    except Exception as e:
+        frappe.log_error(
+            f"Error generating LSM QR code for patient {patient_id}: {str(e)}"
+        )
+        frappe.throw(f"Failed to generate LSM QR code: {str(e)}")
